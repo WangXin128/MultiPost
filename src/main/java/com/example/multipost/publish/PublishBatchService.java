@@ -22,18 +22,21 @@ public class PublishBatchService {
     private final ContentRepository contentRepository;
     private final PlatformContentRepository platformContentRepository;
     private final AuthUserProvider authUserProvider;
+    private final PublishTaskDispatcher publishTaskDispatcher;
 
     public PublishBatchService(
             PublishBatchRepository publishBatchRepository,
             PublishTaskRepository publishTaskRepository,
             ContentRepository contentRepository,
             PlatformContentRepository platformContentRepository,
-            AuthUserProvider authUserProvider) {
+            AuthUserProvider authUserProvider,
+            PublishTaskDispatcher publishTaskDispatcher) {
         this.publishBatchRepository = publishBatchRepository;
         this.publishTaskRepository = publishTaskRepository;
         this.contentRepository = contentRepository;
         this.platformContentRepository = platformContentRepository;
         this.authUserProvider = authUserProvider;
+        this.publishTaskDispatcher = publishTaskDispatcher;
     }
 
     @Transactional
@@ -76,15 +79,17 @@ public class PublishBatchService {
         batch.setTaskCount(platformContents.size());
         publishBatchRepository.save(batch);
 
-        platformContents.forEach(platformContent -> {
+        List<PublishTask> tasks = platformContents.stream().map(platformContent -> {
             PublishTask task = new PublishTask();
             task.setUserId(userId);
             task.setBatchId(batch.getId());
             task.setPlatformContentId(platformContent.getId());
             task.setPlatform(platformContent.getPlatform());
             task.setStatus(PublishTaskStatus.PENDING);
-            publishTaskRepository.save(task);
-        });
+            return publishTaskRepository.save(task);
+        }).toList();
+        publishTaskRepository.flush();
+        tasks.forEach(task -> publishTaskDispatcher.dispatch(task.getId()));
         return toResponse(batch);
     }
 
