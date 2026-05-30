@@ -77,6 +77,24 @@ public class PublishBatchService {
         return toTaskResponse(task);
     }
 
+    @Transactional
+    public PublishTaskResponse retryTask(Long taskId) {
+        PublishTask task = publishTaskRepository
+                .findByIdAndUserIdAndDeletedFalse(taskId, authUserProvider.currentUserId())
+                .orElseThrow(() -> new EntityNotFoundException("publish task not found"));
+        if (task.getStatus() != PublishTaskStatus.FAILED) {
+            throw new IllegalArgumentException("only failed tasks can be retried");
+        }
+        task.setStatus(PublishTaskStatus.RETRYING);
+        task.setRetryCount(0);
+        task.setErrorMessage(null);
+        task.setResultUrl(null);
+        task.setPublishedAt(null);
+        publishTaskRepository.flush();
+        publishTaskDispatcher.dispatch(task.getId());
+        return toTaskResponse(task);
+    }
+
     private PublishBatchResponse createNewBatch(PublishBatchCreateRequest request, Long userId) {
         ContentItem content = contentRepository.findByIdAndUserIdAndDeletedFalse(request.contentId(), userId)
                 .orElseThrow(() -> new EntityNotFoundException("content not found"));
