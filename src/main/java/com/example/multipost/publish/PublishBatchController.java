@@ -35,4 +35,9 @@ public class PublishBatchController {
     public ApiResponse<PublishTaskResponse> getTask(@PathVariable Long id) {
         return ApiResponse.ok(publishBatchService.getTask(id));
     }
+
+    @PostMapping("/tasks/{id}/retry")
+    public ApiResponse<PublishTaskResponse> retryTask(@PathVariable Long id) {
+        return ApiResponse.ok(publishBatchService.retryTask(id));
+    }
 }
