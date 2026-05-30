@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:mysql://mysql:3306/multipost?useUnicode=true&characterEncoding=utf8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
+    username: multipost
+    password: multipost
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+  h2:
+    console:
+      enabled: false
+  data:
+    redis:
+      host: redis
+      port: 6379
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: multipost
+    password: multipost
+
+multipost:
+  jwt-secret: ${MULTIPOST_JWT_SECRET:change-this-secret-to-a-long-random-value-for-prod}
+  rabbit:
+    enabled: true
