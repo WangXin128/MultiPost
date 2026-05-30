@@ -23,6 +23,7 @@ public class PublishBatchService {
     private final PlatformContentRepository platformContentRepository;
     private final AuthUserProvider authUserProvider;
     private final PublishTaskDispatcher publishTaskDispatcher;
+    private final IdempotencyService idempotencyService;
 
     public PublishBatchService(
             PublishBatchRepository publishBatchRepository,
@@ -30,21 +31,36 @@ public class PublishBatchService {
             ContentRepository contentRepository,
             PlatformContentRepository platformContentRepository,
             AuthUserProvider authUserProvider,
-            PublishTaskDispatcher publishTaskDispatcher) {
+            PublishTaskDispatcher publishTaskDispatcher,
+            IdempotencyService idempotencyService) {
         this.publishBatchRepository = publishBatchRepository;
         this.publishTaskRepository = publishTaskRepository;
         this.contentRepository = contentRepository;
         this.platformContentRepository = platformContentRepository;
         this.authUserProvider = authUserProvider;
         this.publishTaskDispatcher = publishTaskDispatcher;
+        this.idempotencyService = idempotencyService;
     }
 
     @Transactional
     public PublishBatchResponse create(PublishBatchCreateRequest request) {
         Long userId = authUserProvider.currentUserId();
-        return publishBatchRepository.findByUserIdAndRequestIdAndDeletedFalse(userId, request.requestId())
-                .map(this::toResponse)
+        return findByRequestId(userId, request.requestId())
+                .orElseGet(() -> createWithIdempotencyGuard(request, userId));
+    }
+
+    private PublishBatchResponse createWithIdempotencyGuard(PublishBatchCreateRequest request, Long userId) {
+        if (!idempotencyService.acquirePublishRequest(userId, request.requestId())) {
+            return findByRequestId(userId, request.requestId())
+                    .orElseThrow(() -> new IllegalArgumentException("duplicate publish request is still processing"));
+        }
+        return findByRequestId(userId, request.requestId())
                 .orElseGet(() -> createNewBatch(request, userId));
+    }
+
+    private java.util.Optional<PublishBatchResponse> findByRequestId(Long userId, String requestId) {
+        return publishBatchRepository.findByUserIdAndRequestIdAndDeletedFalse(userId, requestId)
+                .map(this::toResponse);
     }
 
     @Transactional(readOnly = true)
