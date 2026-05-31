@@ -14,6 +14,8 @@ import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @Service
 public class PublishBatchService {
@@ -22,8 +24,9 @@ public class PublishBatchService {
     private final ContentRepository contentRepository;
     private final PlatformContentRepository platformContentRepository;
     private final AuthUserProvider authUserProvider;
-    private final PublishTaskDispatcher publishTaskDispatcher;
     private final IdempotencyService idempotencyService;
+    private final PublishOutboxService publishOutboxService;
+    private final PublishOutboxProcessor publishOutboxProcessor;
 
     public PublishBatchService(
             PublishBatchRepository publishBatchRepository,
@@ -31,15 +34,17 @@ public class PublishBatchService {
             ContentRepository contentRepository,
             PlatformContentRepository platformContentRepository,
             AuthUserProvider authUserProvider,
-            PublishTaskDispatcher publishTaskDispatcher,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService,
+            PublishOutboxService publishOutboxService,
+            PublishOutboxProcessor publishOutboxProcessor) {
         this.publishBatchRepository = publishBatchRepository;
         this.publishTaskRepository = publishTaskRepository;
         this.contentRepository = contentRepository;
         this.platformContentRepository = platformContentRepository;
         this.authUserProvider = authUserProvider;
-        this.publishTaskDispatcher = publishTaskDispatcher;
         this.idempotencyService = idempotencyService;
+        this.publishOutboxService = publishOutboxService;
+        this.publishOutboxProcessor = publishOutboxProcessor;
     }
 
     @Transactional
@@ -91,7 +96,8 @@ public class PublishBatchService {
         task.setResultUrl(null);
         task.setPublishedAt(null);
         publishTaskRepository.flush();
-        publishTaskDispatcher.dispatch(task.getId());
+        publishOutboxService.enqueuePublishTask(task.getId());
+        processOutboxAfterCommit();
         return toTaskResponse(task);
     }
 
@@ -123,8 +129,22 @@ public class PublishBatchService {
             return publishTaskRepository.save(task);
         }).toList();
         publishTaskRepository.flush();
-        tasks.forEach(task -> publishTaskDispatcher.dispatch(task.getId()));
+        tasks.forEach(task -> publishOutboxService.enqueuePublishTask(task.getId()));
+        processOutboxAfterCommit();
         return toResponse(batch);
+    }
+
+    private void processOutboxAfterCommit() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            publishOutboxProcessor.processDueEvents();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                publishOutboxProcessor.processDueEvents();
+            }
+        });
     }
 
     private PlatformContent findPlatformContent(ContentItem content, Platform platform, Long userId) {
