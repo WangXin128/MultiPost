@@ -38,7 +38,7 @@ public class PublishExecutionService {
         int claimed = publishTaskRepository.claimForPublishing(
                 taskId,
                 PublishTaskStatus.PUBLISHING,
-                List.of(PublishTaskStatus.PENDING, PublishTaskStatus.RETRYING));
+                List.of(PublishTaskStatus.SCHEDULED, PublishTaskStatus.PENDING, PublishTaskStatus.RETRYING));
         if (claimed == 0) {
             return;
         }
@@ -98,10 +98,13 @@ public class PublishExecutionService {
         PublishBatch batch = publishBatchRepository.findById(batchId)
                 .orElseThrow(() -> new EntityNotFoundException("publish batch not found"));
         List<PublishTask> tasks = publishTaskRepository.findByBatchIdAndDeletedFalse(batchId);
+        long scheduledCount = tasks.stream().filter(task -> task.getStatus() == PublishTaskStatus.SCHEDULED).count();
         long successCount = tasks.stream().filter(task -> task.getStatus() == PublishTaskStatus.SUCCESS).count();
         long failedCount = tasks.stream().filter(task -> task.getStatus() == PublishTaskStatus.FAILED).count();
 
-        if (successCount == tasks.size()) {
+        if (scheduledCount == tasks.size()) {
+            batch.setStatus(PublishBatchStatus.SCHEDULED);
+        } else if (successCount == tasks.size()) {
             batch.setStatus(PublishBatchStatus.ALL_SUCCESS);
         } else if (failedCount == tasks.size()) {
             batch.setStatus(PublishBatchStatus.ALL_FAILED);

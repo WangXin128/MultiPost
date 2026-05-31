@@ -2,6 +2,7 @@ import { Tag } from 'antd';
 import type { PublishBatchStatus, PublishTaskStatus } from '../types';
 
 const statusColor: Record<string, string> = {
+  SCHEDULED: 'blue',
   PENDING: 'default',
   PUBLISHING: 'processing',
   RETRYING: 'warning',

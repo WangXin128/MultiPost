@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -34,4 +35,6 @@ public class PublishBatch extends BaseEntity {
 
     @Column(nullable = false)
     private int taskCount;
+
+    private Instant scheduledAt;
 }

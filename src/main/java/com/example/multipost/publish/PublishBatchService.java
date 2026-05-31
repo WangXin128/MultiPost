@@ -6,10 +6,12 @@ import com.example.multipost.auth.AuthUserProvider;
 import com.example.multipost.content.ContentItem;
 import com.example.multipost.content.ContentRepository;
 import com.example.multipost.platform.Platform;
+import com.example.multipost.platform.PlatformCapabilityRepository;
 import com.example.multipost.publish.dto.PublishBatchCreateRequest;
 import com.example.multipost.publish.dto.PublishBatchResponse;
 import com.example.multipost.publish.dto.PublishTaskResponse;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,7 @@ public class PublishBatchService {
     private final IdempotencyService idempotencyService;
     private final PublishOutboxService publishOutboxService;
     private final PublishOutboxProcessor publishOutboxProcessor;
+    private final PlatformCapabilityRepository platformCapabilityRepository;
 
     public PublishBatchService(
             PublishBatchRepository publishBatchRepository,
@@ -36,7 +39,8 @@ public class PublishBatchService {
             AuthUserProvider authUserProvider,
             IdempotencyService idempotencyService,
             PublishOutboxService publishOutboxService,
-            PublishOutboxProcessor publishOutboxProcessor) {
+            PublishOutboxProcessor publishOutboxProcessor,
+            PlatformCapabilityRepository platformCapabilityRepository) {
         this.publishBatchRepository = publishBatchRepository;
         this.publishTaskRepository = publishTaskRepository;
         this.contentRepository = contentRepository;
@@ -45,6 +49,7 @@ public class PublishBatchService {
         this.idempotencyService = idempotencyService;
         this.publishOutboxService = publishOutboxService;
         this.publishOutboxProcessor = publishOutboxProcessor;
+        this.platformCapabilityRepository = platformCapabilityRepository;
     }
 
     @Transactional
@@ -107,6 +112,8 @@ public class PublishBatchService {
         List<Platform> platforms = request.platforms() == null || request.platforms().isEmpty()
                 ? Arrays.asList(Platform.values())
                 : request.platforms();
+        Instant scheduledAt = normalizeSchedule(request.scheduledAt());
+        validateScheduleSupport(platforms, scheduledAt);
         List<PlatformContent> platformContents = platforms.stream()
                 .map(platform -> findPlatformContent(content, platform, userId))
                 .toList();
@@ -115,8 +122,9 @@ public class PublishBatchService {
         batch.setUserId(userId);
         batch.setContentId(content.getId());
         batch.setRequestId(request.requestId());
-        batch.setStatus(PublishBatchStatus.PUBLISHING);
+        batch.setStatus(scheduledAt == null ? PublishBatchStatus.PUBLISHING : PublishBatchStatus.SCHEDULED);
         batch.setTaskCount(platformContents.size());
+        batch.setScheduledAt(scheduledAt);
         publishBatchRepository.save(batch);
 
         List<PublishTask> tasks = platformContents.stream().map(platformContent -> {
@@ -125,13 +133,37 @@ public class PublishBatchService {
             task.setBatchId(batch.getId());
             task.setPlatformContentId(platformContent.getId());
             task.setPlatform(platformContent.getPlatform());
-            task.setStatus(PublishTaskStatus.PENDING);
+            task.setStatus(scheduledAt == null ? PublishTaskStatus.PENDING : PublishTaskStatus.SCHEDULED);
+            task.setScheduledAt(scheduledAt);
             return publishTaskRepository.save(task);
         }).toList();
         publishTaskRepository.flush();
-        tasks.forEach(task -> publishOutboxService.enqueuePublishTask(task.getId()));
-        processOutboxAfterCommit();
+        tasks.forEach(task -> publishOutboxService.enqueuePublishTask(task.getId(), scheduledAt));
+        if (scheduledAt == null) {
+            processOutboxAfterCommit();
+        }
         return toResponse(batch);
+    }
+
+    private Instant normalizeSchedule(Instant scheduledAt) {
+        if (scheduledAt == null || !scheduledAt.isAfter(Instant.now())) {
+            return null;
+        }
+        return scheduledAt;
+    }
+
+    private void validateScheduleSupport(List<Platform> platforms, Instant scheduledAt) {
+        if (scheduledAt == null) {
+            return;
+        }
+        List<Platform> unsupported = platforms.stream()
+                .filter(platform -> platformCapabilityRepository.findByPlatformAndDeletedFalse(platform)
+                        .map(capability -> !capability.isEnabled() || !capability.isSupportsSchedule())
+                        .orElse(true))
+                .toList();
+        if (!unsupported.isEmpty()) {
+            throw new IllegalArgumentException("scheduled publish is not supported for: " + unsupported);
+        }
     }
 
     private void processOutboxAfterCommit() {
@@ -172,6 +204,7 @@ public class PublishBatchService {
                 batch.getRequestId(),
                 batch.getStatus(),
                 batch.getTaskCount(),
+                batch.getScheduledAt(),
                 tasks,
                 batch.getCreatedAt(),
                 batch.getUpdatedAt());
@@ -187,6 +220,7 @@ public class PublishBatchService {
                 task.getRetryCount(),
                 task.getResultUrl(),
                 task.getErrorMessage(),
+                task.getScheduledAt(),
                 task.getPublishedAt(),
                 task.getCreatedAt(),
                 task.getUpdatedAt());
