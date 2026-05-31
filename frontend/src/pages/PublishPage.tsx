@@ -1,4 +1,5 @@
-import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Card, Checkbox, DatePicker, Select, Space, Table, Tag, Typography, message } from 'antd';
+import type { Dayjs } from 'dayjs';
 import { RefreshCcw, Rocket } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listContents } from '../api/contentApi';
@@ -23,6 +24,7 @@ export default function PublishPage() {
   const [platformContents, setPlatformContents] = useState<PlatformContent[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<number>();
   const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
+  const [scheduledAt, setScheduledAt] = useState<Dayjs | null>(null);
   const [batch, setBatch] = useState<PublishBatch | null>(null);
   const [loading, setLoading] = useState(false);
   const pollingRef = useRef<number>();
@@ -41,9 +43,14 @@ export default function PublishPage() {
         </Space>
       ),
       value: capability.platform,
-      disabled: !generatedPlatforms.has(capability.platform)
+      disabled: !generatedPlatforms.has(capability.platform) || (!!scheduledAt && !capability.supportsSchedule)
     })),
-    [capabilities, generatedPlatforms]
+    [capabilities, generatedPlatforms, scheduledAt]
+  );
+
+  const capabilityByPlatform = useMemo(
+    () => new Map(capabilities.map((capability) => [capability.platform, capability])),
+    [capabilities]
   );
 
   async function loadContents() {
@@ -112,12 +119,20 @@ export default function PublishPage() {
       message.warning(`Generate adapted content first: ${missing.join(', ')}`);
       return;
     }
+    const unsupportedSchedule = scheduledAt
+      ? selectedPlatforms.filter((platform) => !capabilityByPlatform.get(platform)?.supportsSchedule)
+      : [];
+    if (unsupportedSchedule.length > 0) {
+      message.warning(`Scheduled publish is not supported for: ${unsupportedSchedule.join(', ')}`);
+      return;
+    }
     setLoading(true);
     try {
       const created = await createPublishBatch({
         contentId: selectedContentId,
         requestId: `web-${selectedContentId}-${Date.now()}`,
-        platforms: selectedPlatforms
+        platforms: selectedPlatforms,
+        scheduledAt: scheduledAt?.toISOString()
       });
       setBatch(created);
       startPolling(created.id);
@@ -167,8 +182,22 @@ export default function PublishPage() {
             value={selectedPlatforms}
             onChange={(values) => setSelectedPlatforms(values as Platform[])}
           />
+          <DatePicker
+            showTime
+            allowClear
+            className="content-select"
+            placeholder="Optional scheduled publish time"
+            value={scheduledAt}
+            onChange={(value) => {
+              setScheduledAt(value);
+              if (value) {
+                setSelectedPlatforms((current) => current.filter((platform) => capabilityByPlatform.get(platform)?.supportsSchedule));
+              }
+            }}
+            disabledDate={(current) => !!current && current.endOf('day').valueOf() < Date.now()}
+          />
           <Typography.Text type="secondary">
-            Platform modes come from the backend capability matrix. Disabled platforms do not have generated adapted content for the selected draft version.
+            Platform modes come from the backend capability matrix. Scheduled publish only allows platforms marked as schedule-capable.
           </Typography.Text>
         </Space>
       </Card>
@@ -179,6 +208,7 @@ export default function PublishPage() {
             <Space>
               <span>Batch #{batch.id}</span>
               <TaskStatusTag status={batch.status} />
+              {batch.scheduledAt && <Typography.Text type="secondary">Scheduled for {new Date(batch.scheduledAt).toLocaleString()}</Typography.Text>}
             </Space>
           }
         >
@@ -193,6 +223,12 @@ export default function PublishPage() {
                 dataIndex: 'status',
                 width: 150,
                 render: (status) => <TaskStatusTag status={status} />
+              },
+              {
+                title: 'Scheduled',
+                dataIndex: 'scheduledAt',
+                width: 190,
+                render: (value?: string) => value ? new Date(value).toLocaleString() : <Typography.Text type="secondary">-</Typography.Text>
               },
               { title: 'Retries', dataIndex: 'retryCount', width: 100 },
               {

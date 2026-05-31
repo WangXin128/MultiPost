@@ -10,6 +10,7 @@ public record PublishBatchResponse(
         String requestId,
         PublishBatchStatus status,
         int taskCount,
+        Instant scheduledAt,
         List<PublishTaskResponse> tasks,
         Instant createdAt,
         Instant updatedAt) {

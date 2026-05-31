@@ -13,6 +13,7 @@ public record PublishTaskResponse(
         int retryCount,
         String resultUrl,
         String errorMessage,
+        Instant scheduledAt,
         Instant publishedAt,
         Instant createdAt,
         Instant updatedAt) {

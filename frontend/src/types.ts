@@ -3,8 +3,8 @@ export type ContentStatus = 'DRAFT' | 'READY' | 'ARCHIVED';
 export type Platform = 'WECHAT' | 'ZHIHU' | 'BILIBILI' | 'XIAOHONGSHU';
 export type PublishMode = 'MOCK' | 'API' | 'MANUAL' | 'CLIENT_ASSISTED';
 export type AuthType = 'NONE' | 'APP_SECRET' | 'OAUTH2' | 'USER_CONFIRMATION';
-export type PublishTaskStatus = 'PENDING' | 'PUBLISHING' | 'SUCCESS' | 'FAILED' | 'RETRYING' | 'UNKNOWN';
-export type PublishBatchStatus = 'PUBLISHING' | 'ALL_SUCCESS' | 'PARTIAL_SUCCESS' | 'ALL_FAILED';
+export type PublishTaskStatus = 'SCHEDULED' | 'PENDING' | 'PUBLISHING' | 'SUCCESS' | 'FAILED' | 'RETRYING' | 'UNKNOWN';
+export type PublishBatchStatus = 'SCHEDULED' | 'PUBLISHING' | 'ALL_SUCCESS' | 'PARTIAL_SUCCESS' | 'ALL_FAILED';
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -81,6 +81,7 @@ export interface PublishTask {
   retryCount: number;
   resultUrl?: string;
   errorMessage?: string;
+  scheduledAt?: string;
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -92,6 +93,7 @@ export interface PublishBatch {
   requestId: string;
   status: PublishBatchStatus;
   taskCount: number;
+  scheduledAt?: string;
   tasks: PublishTask[];
   createdAt: string;
   updatedAt: string;

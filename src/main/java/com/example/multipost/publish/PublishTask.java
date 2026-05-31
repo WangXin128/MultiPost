@@ -51,5 +51,7 @@ public class PublishTask extends BaseEntity {
     @Lob
     private String errorMessage;
 
+    private Instant scheduledAt;
+
     private Instant publishedAt;
 }
