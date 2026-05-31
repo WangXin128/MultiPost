@@ -167,6 +167,28 @@ body {
   min-width: 360px;
 }
 
+.capability-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.capability-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.capability-row:last-child {
+  border-bottom: none;
+}
+
+.capability-row .ant-typography {
+  margin-bottom: 0;
+}
+
 .login-page {
   min-height: 100vh;
   display: grid;
@@ -212,6 +234,7 @@ body {
 
   .platform-grid,
   .form-grid,
+  .capability-row,
   .login-page {
     grid-template-columns: 1fr;
   }

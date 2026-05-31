@@ -1,6 +1,8 @@
 export type ContentType = 'ARTICLE' | 'VIDEO_SCRIPT' | 'NOTE';
 export type ContentStatus = 'DRAFT' | 'READY' | 'ARCHIVED';
 export type Platform = 'WECHAT' | 'ZHIHU' | 'BILIBILI' | 'XIAOHONGSHU';
+export type PublishMode = 'MOCK' | 'API' | 'MANUAL' | 'CLIENT_ASSISTED';
+export type AuthType = 'NONE' | 'APP_SECRET' | 'OAUTH2' | 'USER_CONFIRMATION';
 export type PublishTaskStatus = 'PENDING' | 'PUBLISHING' | 'SUCCESS' | 'FAILED' | 'RETRYING' | 'UNKNOWN';
 export type PublishBatchStatus = 'PUBLISHING' | 'ALL_SUCCESS' | 'PARTIAL_SUCCESS' | 'ALL_FAILED';
 
@@ -56,6 +58,18 @@ export interface PlatformContent {
   sourceVersion: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PlatformCapability {
+  platform: Platform;
+  displayName: string;
+  publishMode: PublishMode;
+  authType: AuthType;
+  supportsSchedule: boolean;
+  supportsStatusQuery: boolean;
+  supportsMediaUpload: boolean;
+  enabled: boolean;
+  notes: string;
 }
 
 export interface PublishTask {

@@ -1,17 +1,18 @@
-import { Button, Card, Form, Input, Modal, Select, Space, Typography, message } from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Tag, Typography, message } from 'antd';
 import { Wand2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { listContents } from '../api/contentApi';
+import { listPlatformCapabilities } from '../api/platformCapabilityApi';
 import { adaptContent, listPlatformContents, updatePlatformContent } from '../api/platformContentApi';
 import PlatformPreview from '../components/PlatformPreview';
-import type { ContentItem, Platform, PlatformContent } from '../types';
+import type { ContentItem, PlatformCapability, PlatformContent } from '../types';
 
-const platforms: Platform[] = ['WECHAT', 'ZHIHU', 'BILIBILI', 'XIAOHONGSHU'];
 const { TextArea } = Input;
 
 export default function AdaptPage() {
   const [contents, setContents] = useState<ContentItem[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<number>();
+  const [capabilities, setCapabilities] = useState<PlatformCapability[]>([]);
   const [items, setItems] = useState<PlatformContent[]>([]);
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<PlatformContent | null>(null);
@@ -25,6 +26,11 @@ export default function AdaptPage() {
     }
   }
 
+  async function loadCapabilities() {
+    const data = await listPlatformCapabilities();
+    setCapabilities(data);
+  }
+
   async function loadAdapted(contentId: number) {
     const data = await listPlatformContents(contentId);
     setItems(data);
@@ -32,6 +38,7 @@ export default function AdaptPage() {
 
   useEffect(() => {
     loadContents().catch((error) => message.error(error instanceof Error ? error.message : 'Failed to load content'));
+    loadCapabilities().catch((error) => message.error(error instanceof Error ? error.message : 'Failed to load platform capabilities'));
   }, []);
 
   useEffect(() => {
@@ -47,6 +54,7 @@ export default function AdaptPage() {
     }
     setLoading(true);
     try {
+      const platforms = capabilities.map((capability) => capability.platform);
       const data = await adaptContent(selectedContentId, platforms);
       setItems(data);
     } catch (error) {
@@ -92,6 +100,26 @@ export default function AdaptPage() {
           </Button>
         </Space>
       </div>
+
+      <Card title="Platform capability matrix">
+        <div className="capability-grid">
+          {capabilities.map((capability) => (
+            <div className="capability-row" key={capability.platform}>
+              <div>
+                <Typography.Text strong>{capability.displayName}</Typography.Text>
+                <Typography.Paragraph type="secondary">{capability.notes}</Typography.Paragraph>
+              </div>
+              <Space wrap>
+                <Tag color={capability.publishMode === 'API' ? 'green' : capability.publishMode === 'MANUAL' ? 'orange' : 'blue'}>
+                  {capability.publishMode}
+                </Tag>
+                <Tag>{capability.authType}</Tag>
+                {capability.supportsMediaUpload && <Tag>MEDIA</Tag>}
+              </Space>
+            </div>
+          ))}
+        </div>
+      </Card>
 
       <div className="platform-grid">
         {items.map((item) => (
