@@ -4,6 +4,9 @@ MultiPost is a full-stack multi-platform content publishing system. It manages o
 
 The current implementation focuses on the engineering workflow around publishing: authentication, draft versioning, platform adaptation, reliable task dispatch, retry handling, platform capability modeling, and scheduled publishing. Real platform publishing is represented by a mock publisher so the core backend flow can be tested without depending on third-party platform approvals.
 
+## Demo
+【multipost演示】 https://www.bilibili.com/video/BV1KBVD64ErA/?share_source=copy_web&vd_source=e55a2f1f5ba3e18d918d72b5c561fb15
+
 ## Features
 
 - JWT-based registration and login.
