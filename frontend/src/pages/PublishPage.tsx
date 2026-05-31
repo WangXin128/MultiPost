@@ -1,26 +1,28 @@
-import { Button, Card, Checkbox, Select, Space, Table, Typography, message } from 'antd';
+import { Button, Card, Checkbox, Select, Space, Table, Tag, Typography, message } from 'antd';
 import { RefreshCcw, Rocket } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { listContents } from '../api/contentApi';
+import { listPlatformCapabilities } from '../api/platformCapabilityApi';
 import { listPlatformContents } from '../api/platformContentApi';
 import { createPublishBatch, getPublishBatch, retryTask } from '../api/publishApi';
 import TaskStatusTag from '../components/TaskStatusTag';
-import type { ContentItem, Platform, PlatformContent, PublishBatch } from '../types';
-
-const platforms: { label: string; value: Platform }[] = [
-  { label: 'WeChat', value: 'WECHAT' },
-  { label: 'Zhihu', value: 'ZHIHU' },
-  { label: 'Bilibili', value: 'BILIBILI' },
-  { label: 'Xiaohongshu', value: 'XIAOHONGSHU' }
-];
+import type { ContentItem, Platform, PlatformCapability, PlatformContent, PublishBatch, PublishMode } from '../types';
 
 const finishedStatuses = ['ALL_SUCCESS', 'PARTIAL_SUCCESS', 'ALL_FAILED'];
 
+const publishModeColor: Record<PublishMode, string> = {
+  MOCK: 'default',
+  API: 'green',
+  MANUAL: 'orange',
+  CLIENT_ASSISTED: 'blue'
+};
+
 export default function PublishPage() {
   const [contents, setContents] = useState<ContentItem[]>([]);
+  const [capabilities, setCapabilities] = useState<PlatformCapability[]>([]);
   const [platformContents, setPlatformContents] = useState<PlatformContent[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<number>();
-  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>(platforms.map((item) => item.value));
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
   const [batch, setBatch] = useState<PublishBatch | null>(null);
   const [loading, setLoading] = useState(false);
   const pollingRef = useRef<number>();
@@ -28,6 +30,20 @@ export default function PublishPage() {
   const generatedPlatforms = useMemo(
     () => new Set(platformContents.map((item) => item.platform)),
     [platformContents]
+  );
+
+  const platformOptions = useMemo(
+    () => capabilities.map((capability) => ({
+      label: (
+        <Space size={6}>
+          <span>{capability.displayName}</span>
+          <Tag color={publishModeColor[capability.publishMode]}>{capability.publishMode}</Tag>
+        </Space>
+      ),
+      value: capability.platform,
+      disabled: !generatedPlatforms.has(capability.platform)
+    })),
+    [capabilities, generatedPlatforms]
   );
 
   async function loadContents() {
@@ -43,8 +59,15 @@ export default function PublishPage() {
     setPlatformContents(data);
   }
 
+  async function loadCapabilities() {
+    const data = await listPlatformCapabilities();
+    setCapabilities(data);
+    setSelectedPlatforms((current) => current.length > 0 ? current : data.map((item) => item.platform));
+  }
+
   useEffect(() => {
     loadContents().catch((error) => message.error(error instanceof Error ? error.message : 'Failed to load content'));
+    loadCapabilities().catch((error) => message.error(error instanceof Error ? error.message : 'Failed to load platform capabilities'));
     return () => {
       if (pollingRef.current) {
         window.clearInterval(pollingRef.current);
@@ -140,15 +163,12 @@ export default function PublishPage() {
             options={contents.map((item) => ({ value: item.id, label: `${item.title} · v${item.version}` }))}
           />
           <Checkbox.Group
-            options={platforms.map((item) => ({
-              ...item,
-              disabled: !generatedPlatforms.has(item.value)
-            }))}
+            options={platformOptions}
             value={selectedPlatforms}
             onChange={(values) => setSelectedPlatforms(values as Platform[])}
           />
           <Typography.Text type="secondary">
-            Disabled platforms do not have generated adapted content for the selected draft version.
+            Platform modes come from the backend capability matrix. Disabled platforms do not have generated adapted content for the selected draft version.
           </Typography.Text>
         </Space>
       </Card>
